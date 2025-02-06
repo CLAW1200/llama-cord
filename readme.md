@@ -1,6 +1,6 @@
 # 🤖 Ollama Client in Discord with Custom Agents
 
-A Discord bot that lets you create and interact with multiple AI agents powered by Ollama, featuring agent simulations and customizable personalities.
+A Discord app that lets you create and interact with multiple AI agents powered by Ollama, featuring agent simulations and customizable personalities.
 
 ## ✨ Features
 
@@ -27,8 +27,9 @@ A Discord bot that lets you create and interact with multiple AI agents powered 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Discord Bot Token
+- Discord app token
 - Ollama installed and running
+
 
 ### Installation
 
@@ -64,7 +65,7 @@ A Discord bot that lets you create and interact with multiple AI agents powered 
    TESTTOKEN=your_test_bot_token
    ```
 
-### 🏃‍♂️ Running the Bot
+### 🏃‍♂️ Running the App
 
 ```bash
 python main.py -s
@@ -86,22 +87,22 @@ python main.py -s
 |:--------|:------------|
 | `/agent ask <agent_name> <question>` | Ask a specific agent a question |
 | `/agent create <agent_name> <personality>` | Create a new agent with given personality |
-| `/agent default` | Reset to default agent settings |
+| `/agent default` | Reset to default list of agents |
 | `/agent delete <agent_name>` | Delete a specific agent |
 | `/agent delete_all` | Delete all agents |
 | `/agent list` | List all available agents |
 | `/agent simulation` | Start an agent discussion simulation |
-| `/agent toggle <agent_name>` | Enable/disable a specific agent |
+| `/agent toggle <agent_name>` | Enable/disable a specific agent from the simulation |
 
 ### Global Settings
 
 | Command | Description |
 |:--------|:------------|
-| `/global cleanup` | Clean up bot resources |
+| `/global cleanup` | Remove all the app webhooks from the server |
 | `/global parameters list` | Show current model parameters |
-| `/global parameters model <model>` | Set the AI model to use |
+| `/global parameters model <model>` | Set the AI model for agents to use |
 | `/global parameters set` | Configure model generation parameters |
-| `/global set_system_prompt <prompt>` | Set the system prompt for the AI |
+| `/global set_system_prompt <prompt>` | Set the system prompt for the agents |
 
 ## 🔧 Simulation Parameters
 
