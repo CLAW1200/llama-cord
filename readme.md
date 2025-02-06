@@ -7,7 +7,20 @@ A Discord bot that lets you create and interact with multiple AI agents powered 
 - 🎭 Support for multiple agents with distinct personalities
 - 🎬 Simulate conversations between multiple agents in a channel
 - 👤 Realistic agent interactions using Discord webhooks with custom avatars
+- 💡 Create custom agents with custom personalities
+- 📝 Benchmarking of agent performance
 - ⚙️ Global commands for managing agents and model parameters
+
+## Screenshots
+
+### Agent List & Management
+<img src="https://i.imgur.com/fcyEbjs.png" alt="Agent Management" height="300"/>
+
+### Multi-Agent Simulation
+<img src="https://i.imgur.com/deiWjob.png" alt="Agent Simulation" height="300"/>
+
+### Custom Agent Creation
+<img src="https://i.imgur.com/Oh7E2IC.png" alt="Custom Agents" height="200"/>
 
 ## 🚀 Getting Started
 
