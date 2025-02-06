@@ -7,6 +7,9 @@ import aiohttp
 from typing import Optional, List, Dict
 from core.utils import cleanup_webhooks, get_or_create_webhook
 import time
+import json
+import os
+from pathlib import Path
 
 @dataclass
 class AgentTemplate:
@@ -67,6 +70,67 @@ class Agent:
         if self.history is None:
             self.history = []
 
+def save_agent_templates(templates):
+    """Save agent templates to config file"""
+    config_path = Path("data/config.json")
+    
+    # Convert templates to dictionary format
+    templates_dict = [
+        {
+            "agent_name": t.agent_name,
+            "personality": t.personality,
+            "avatar_url": t.avatar_url,
+            "active": t.active
+        }
+        for t in templates
+    ]
+    
+    # Load existing config if it exists
+    config = {}
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    
+    # Update agent templates
+    config['agent_templates'] = templates_dict
+    
+    # Save updated config
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=4)
+
+def load_agent_templates():
+    """Load agent templates from config file"""
+    config_path = Path("data/config.json")
+    
+    if not config_path.exists():
+        # Create data directory if it doesn't exist
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Save default templates to config and return them
+        save_agent_templates(default_agent_templates)
+        return default_agent_templates
+        
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            
+        if 'agent_templates' not in config or not config['agent_templates']:
+            # Save default templates to config and return them if no templates exist
+            save_agent_templates(default_agent_templates)
+            return default_agent_templates
+            
+        # Return existing templates from config
+        return [
+            AgentTemplate(
+                agent_name=t['agent_name'],
+                personality=t['personality'],
+                avatar_url=t['avatar_url'],
+                active=t.get('active', True)
+            )
+            for t in config['agent_templates']
+        ]
+    except Exception as e:
+        print(f"Error loading agent templates: {e}")
+        return default_agent_templates
 
 class AgentCog(Cog):
     def __init__(self, bot):
@@ -77,7 +141,7 @@ class AgentCog(Cog):
         self.global_model = "llama3.2"
         self.global_system_prompt = """You are participating in a multi-agent conversation. Keep your responses short and relevant.
         Always stay in character and respond from your specialized perspective while engaging meaningfully with other agents' messages."""
-        self.agent_templates = default_agent_templates
+        self.agent_templates = load_agent_templates()
         self.global_temperature = 0.8
         self.global_num_ctx = 2048
         self.global_top_k = 40
@@ -337,6 +401,9 @@ class AgentCog(Cog):
             active=True
         ))
         
+        # Save updated templates
+        save_agent_templates(self.agent_templates)
+        
         embed = discord.Embed(
             title="✅ Agent Created",
             description=f"Successfully created agent: **{agent_name}**",
@@ -365,6 +432,7 @@ class AgentCog(Cog):
             return
 
         self.agent_templates = [t for t in self.agent_templates if t.agent_name != agent_name]
+        save_agent_templates(self.agent_templates)
         
         embed = discord.Embed(
             title="🗑️ Agent Deleted",
@@ -380,6 +448,7 @@ class AgentCog(Cog):
         """Command to delete all agents"""
         agent_count = len(self.agent_templates)
         self.agent_templates = []
+        save_agent_templates(self.agent_templates)
         
         embed = discord.Embed(
             title="🗑️ All Agents Deleted",
@@ -420,6 +489,9 @@ class AgentCog(Cog):
         await ctx.defer()
         previous_count = len(self.agent_templates)
         self.agent_templates = default_agent_templates
+        
+        # Save the default templates to config
+        save_agent_templates(self.agent_templates)
         
         embed = discord.Embed(
             title="✅ Default Agents Created",
@@ -507,10 +579,27 @@ class AgentCog(Cog):
         template = next((t for t in self.agent_templates if t.agent_name.lower() == agent_name.lower()), None)
         if template:
             template.active = not template.active
-            status = "activated" if template.active else "deactivated"
-            await ctx.respond(f"Agent '{agent_name}' has been {status}")
+            save_agent_templates(self.agent_templates)
+            
+            status = "Active 🟢" if template.active else "Inactive 🔴"
+            action = "activated" if template.active else "deactivated"
+            
+            embed = discord.Embed(
+                title=f"Agent Status Changed",
+                description=f"Successfully {action} agent: **{agent_name}**",
+                color=discord.Color.green() if template.active else discord.Color.red()
+            )
+            embed.add_field(name="Current Status", value=status, inline=True)
+            embed.add_field(name="Personality", value=template.personality, inline=False)
+            
+            await ctx.respond(embed=embed)
         else:
-            await ctx.respond(f"Agent '{agent_name}' not found", ephemeral=True)
+            error_embed = discord.Embed(
+                title="❌ Agent Not Found",
+                description=f"No agent found with name '{agent_name}'",
+                color=discord.Color.red()
+            )
+            await ctx.respond(embed=error_embed, ephemeral=True)
 
     @discord.Cog.listener()
     async def on_message(self, message):
