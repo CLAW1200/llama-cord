@@ -282,12 +282,34 @@ class AgentCog(Cog):
         total_time, message_count = await self.start_conversation(target_channel, topic, turns, random_order)
         
         avg_time = total_time / message_count
-        await progress_msg.edit(
-            content=f"✨ Conversation completed in {target_channel.mention}!\n"
-            f"Total time: {total_time:.2f}s\n"
-            f"Messages: {message_count}\n"
-            f"Average generation time: {avg_time:.2f}s per message"
+
+        # Create an embed for the results
+        embed = discord.Embed(
+            title="✨ Conversation Completed",
+            description=f"Conversation finished in {target_channel.mention}",
+            color=discord.Color.green()
         )
+
+        # Add benchmark fields
+        embed.add_field(
+            name="⏱️ Time Statistics",
+            value=f"Total Time: `{total_time:.2f}s`\nAverage per Message: `{avg_time:.2f}s`",
+            inline=True
+        )
+
+        embed.add_field(
+            name="📊 Message Statistics",
+            value=f"Messages Generated: `{message_count}`\nAgents Involved: `{num_agents}`",
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎲 Configuration",
+            value=f"Turn Count: `{turns}`\nOrder Type: `{order_type.title()}`",
+            inline=False
+        )
+
+        await progress_msg.edit(content=None, embed=embed)
 
     @agent.command(name="create", description="Create a new agent with a specific personality")
     @discord.option(name="agent_name", description="The name of the agent", required=True)
