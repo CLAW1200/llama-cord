@@ -17,7 +17,7 @@ A Discord bot that lets you create and interact with multiple AI agents powered 
 <img src="https://i.imgur.com/fcyEbjs.png" alt="Agent Management" height="300"/>
 
 ### Multi-Agent Simulation
-<img src="https://i.imgur.com/deiWjob.png" alt="Agent Simulation" height="300"/>
+<img src="https://i.imgur.com/oXJK6Yf.png" alt="Agent Simulation" height="300"/>
 
 ### Custom Agent Creation
 <img src="https://i.imgur.com/Oh7E2IC.png" alt="Custom Agents" height="200"/>
