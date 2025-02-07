@@ -95,8 +95,6 @@ class Bot(commands.Bot):
                 "Commands are not supported in DMs. Please use commands in a server instead.",
                 ephemeral=True
             )
-        else:
-            return await super().on_application_command(ctx)
 
     async def on_application_command_error(self, ctx: Context, error: Exception):
         if isinstance(error, discord.ApplicationCommandInvokeError):
