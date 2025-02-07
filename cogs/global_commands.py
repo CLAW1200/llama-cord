@@ -1,6 +1,6 @@
 import discord
 from core import Cog
-from core.utils import cleanup_webhooks
+from core.utils import cleanup_webhooks, update_bot_parameters
 
 class GlobalCommandsCog(Cog):
     def __init__(self, bot):
@@ -41,6 +41,46 @@ class GlobalCommandsCog(Cog):
         
         await ctx.respond(embed=embed)
 
+    @parameters_group.command(name="model", description="Set the global model for all agents")
+    @discord.option(
+        name="model",
+        description="The model to set for all agents",
+        choices=[
+            "llama3.2",
+            "smollm:135m"
+        ],
+        required=True
+    )
+    async def parameters_model(self, ctx, model: str):
+        """Command to set the global model for all agents"""
+        agent_cog = self.bot.get_cog("AgentCog")
+        if not agent_cog:
+            await ctx.respond("Agent system is not loaded!", ephemeral=True)
+            return
+
+        # Get user-specific configuration
+        user_config = agent_cog.get_user_config(str(ctx.author.id))
+        
+        # Update the model in the user's config
+        user_config['bot_config']['model'] = model
+        agent_cog.global_model = model
+
+        # Use the update_bot_parameters utility function to save the config
+        update_bot_parameters(
+            agent_cog,
+            user_id=str(ctx.author.id),
+            model=model,
+        )
+
+        embed = discord.Embed(
+            title="✅ Global Model Updated",
+            description="Your model settings have been updated and saved",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="New Model", value=model, inline=False)
+
+        await ctx.respond(embed=embed)
+
     @parameters_group.command(name="set", description="Set the global parameters for all agents")
     @discord.option(name="temperature", description="The temperature of the model. (Default: 0.8)", type=float, required=False)
     @discord.option(name="num_ctx", description="Sets the size of the context window. (Default: 2048)", type=int, required=False)
@@ -49,32 +89,42 @@ class GlobalCommandsCog(Cog):
     @discord.option(name="repeat_penalty", description="Sets how strongly to penalize repetitions (Default: 1.1)", type=float, required=False)
     @discord.option(name="num_predict", description="Sets the number of tokens to predict. (Default: 150)", type=int, required=False)
     async def parameters_set(self, ctx, temperature: float = None, num_ctx: int = None, top_k: int = None, top_p: float = None, repeat_penalty: float = None, num_predict: int = None):
-
-
         """Command to set the global parameters for all agents"""
-        # Get the AgentCog instance
         agent_cog = self.bot.get_cog("AgentCog")
         if not agent_cog:
             await ctx.respond("Agent system is not loaded!", ephemeral=True)
             return
         
+        # Get user-specific configuration
+        user_config = agent_cog.get_user_config(str(ctx.author.id))
+        
+        # Create a dictionary of only the parameters that were provided
+        params = {}
         if temperature is not None:
+            params['temperature'] = temperature
             agent_cog.global_temperature = temperature
         if num_ctx is not None:
+            params['num_ctx'] = num_ctx
             agent_cog.global_num_ctx = num_ctx
         if top_k is not None:
+            params['top_k'] = top_k
             agent_cog.global_top_k = top_k
         if top_p is not None:
+            params['top_p'] = top_p
             agent_cog.global_top_p = top_p
         if repeat_penalty is not None:
+            params['repeat_penalty'] = repeat_penalty
             agent_cog.global_repeat_penalty = repeat_penalty
         if num_predict is not None:
+            params['num_predict'] = num_predict
             agent_cog.global_num_predict = num_predict
 
+        # Update parameters using utility function with only the changed parameters
+        update_bot_parameters(agent_cog, user_id=str(ctx.author.id), **params)
 
         embed = discord.Embed(
             title="✅ Global Parameters Updated",
-            description=f"The global parameters have been updated.",
+            description=f"Your parameters have been updated and saved.",
             color=discord.Color.green()
         )
 
@@ -95,46 +145,25 @@ class GlobalCommandsCog(Cog):
             await ctx.respond("Agent system is not loaded!", ephemeral=True)
             return
 
+        # Get user-specific configuration
+        user_config = agent_cog.get_user_config(str(ctx.author.id))
+        bot_config = user_config['bot_config']
+
         embed = discord.Embed(
-            title="📊 Current Global Parameters",
-            description="These are the current global parameters for all agents:",
+            title="📊 Your Current Parameters",
+            description="These are your current parameters for all agents:",
             color=discord.Color.blue()
         )
-        embed.add_field(name="Temperature", value=agent_cog.global_temperature, inline=True)
-        embed.add_field(name="Num Context", value=agent_cog.global_num_ctx, inline=True)
-        embed.add_field(name="Top K", value=agent_cog.global_top_k, inline=True)
-        embed.add_field(name="Top P", value=agent_cog.global_top_p, inline=True)
-        embed.add_field(name="Repeat Penalty", value=agent_cog.global_repeat_penalty, inline=True)
-        embed.add_field(name="Num Predict", value=agent_cog.global_num_predict, inline=True)
-
-        await ctx.respond(embed=embed)
-
-
-    @parameters_group.command(name="model", description="Set the global model for all agents")
-    @discord.option(
-        name="model",
-        description="The model to set for all agents",
-        choices=[
-            "llama3.2",
-            "smollm:135m"
-        ],
-        required=True
-    )
-    async def parameters_model(self, ctx, model: str):
-        """Command to set the global model for all agents"""
-        agent_cog = self.bot.get_cog("AgentCog")
-        if not agent_cog:
-            await ctx.respond("Agent system is not loaded!", ephemeral=True)
-            return
-
-        agent_cog.global_model = model
-
-        embed = discord.Embed(
-            title="✅ Global Model Updated",
-            description="The global model has been updated",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="New Model", value=model, inline=False)
+        
+        # Use values from user's bot_config
+        params = bot_config.get('parameters', {})
+        embed.add_field(name="Model", value=bot_config.get('model', 'llama3.2'), inline=True)
+        embed.add_field(name="Temperature", value=params.get('temperature', 0.8), inline=True)
+        embed.add_field(name="Num Context", value=params.get('num_ctx', 2048), inline=True)
+        embed.add_field(name="Top K", value=params.get('top_k', 40), inline=True)
+        embed.add_field(name="Top P", value=params.get('top_p', 0.9), inline=True)
+        embed.add_field(name="Repeat Penalty", value=params.get('repeat_penalty', 1.1), inline=True)
+        embed.add_field(name="Num Predict", value=params.get('num_predict', 150), inline=True)
 
         await ctx.respond(embed=embed)
 

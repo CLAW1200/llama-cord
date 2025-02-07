@@ -1,10 +1,12 @@
 from discord import DiscordException
 from discord.ext import commands
 from typing import Any, Literal
-import datetime
 from datetime import timedelta
 import discord
 from typing import Optional
+import json
+from pathlib import Path
+from dataclasses import dataclass
 
 __all__ = (
     "s",
@@ -97,4 +99,240 @@ async def get_or_create_webhook(channel: discord.TextChannel, name: str, bot_use
     return await channel.create_webhook(
         name=name,
         avatar=avatar_data
-    ) 
+    )
+
+def save_bot_config(agent_templates, bot_config, user_id: str = "default"):
+    """Save agent templates and bot configuration to config file for a specific user"""
+    config_path = Path("data/config.json")
+    
+    # Create data directory and config file if they don't exist
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    if not config_path.exists():
+        config_path.touch()
+    
+    # Convert templates to dictionary format
+    templates_dict = [
+        {
+            "agent_name": t.agent_name,
+            "personality": t.personality,
+            "avatar_url": t.avatar_url,
+            "active": t.active
+        }
+        for t in agent_templates
+    ]
+    
+    # Load existing config if it exists and has content
+    config = {}
+    if config_path.stat().st_size > 0:
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+        except json.JSONDecodeError:
+            config = {}
+    
+    # Initialize users dict if it doesn't exist
+    if 'users' not in config:
+        config['users'] = {}
+    
+    # Update or create user-specific config
+    config['users'][user_id] = {
+        'agent_templates': templates_dict,
+        'bot_config': bot_config
+    }
+    
+    # Save updated config
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=4)
+
+def load_bot_config(default_templates, default_bot_config, user_id: str = "default"):
+    """Load agent templates and bot configuration from config file for a specific user"""
+    config_path = Path("data/config.json")
+    
+    if not config_path.exists():
+        # Create data directory if it doesn't exist
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Save defaults for this user
+        save_bot_config(default_templates, default_bot_config, user_id)
+        return default_templates, default_bot_config
+        
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        
+        # Initialize users dict if it doesn't exist
+        if 'users' not in config:
+            config['users'] = {}
+        
+        # If user doesn't exist, create with defaults
+        if user_id not in config['users']:
+            config['users'][user_id] = {
+                'agent_templates': [
+                    {
+                        "agent_name": t.agent_name,
+                        "personality": t.personality,
+                        "avatar_url": t.avatar_url,
+                        "active": t.active
+                    }
+                    for t in default_templates
+                ],
+                'bot_config': default_bot_config
+            }
+            save_bot_config(default_templates, default_bot_config, user_id)
+            return default_templates, default_bot_config
+            
+        user_config = config['users'][user_id]
+        needs_save = False
+        
+        # Handle missing or empty configurations
+        if 'agent_templates' not in user_config or not user_config['agent_templates']:
+            user_config['agent_templates'] = [
+                {
+                    "agent_name": t.agent_name,
+                    "personality": t.personality,
+                    "avatar_url": t.avatar_url,
+                    "active": t.active
+                }
+                for t in default_templates
+            ]
+            needs_save = True
+            
+        if 'bot_config' not in user_config:
+            user_config['bot_config'] = default_bot_config
+            needs_save = True
+        else:
+            # Check and set missing parameters
+            if 'parameters' not in user_config['bot_config']:
+                user_config['bot_config']['parameters'] = default_bot_config['parameters']
+                needs_save = True
+            else:
+                for key, value in default_bot_config['parameters'].items():
+                    if key not in user_config['bot_config']['parameters']:
+                        user_config['bot_config']['parameters'][key] = value
+                        needs_save = True
+            
+            # Check other bot_config fields
+            for key, value in default_bot_config.items():
+                if key not in user_config['bot_config'] and key != 'parameters':
+                    user_config['bot_config'][key] = value
+                    needs_save = True
+        
+        # Save if any defaults were added
+        if needs_save:
+            save_bot_config(default_templates, user_config['bot_config'], user_id)
+        
+        # Convert templates back to objects
+        templates = [
+            AgentTemplate(
+                agent_name=t['agent_name'],
+                personality=t['personality'],
+                avatar_url=t['avatar_url'],
+                active=t.get('active', True)
+            )
+            for t in user_config['agent_templates']
+        ]
+        
+        return templates, user_config['bot_config']
+        
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        # On any error, return and save defaults
+        save_bot_config(default_templates, default_bot_config, user_id)
+        return default_templates, default_bot_config
+
+def update_bot_parameters(agent_cog, user_id: str = "default", **parameters):
+    """Update bot parameters and save configuration for a specific user"""
+    # Update parameters that were provided
+    if 'temperature' in parameters:
+        agent_cog.global_temperature = parameters['temperature']
+    if 'num_ctx' in parameters:
+        agent_cog.global_num_ctx = parameters['num_ctx']
+    if 'top_k' in parameters:
+        agent_cog.global_top_k = parameters['top_k']
+    if 'top_p' in parameters:
+        agent_cog.global_top_p = parameters['top_p']
+    if 'repeat_penalty' in parameters:
+        agent_cog.global_repeat_penalty = parameters['repeat_penalty']
+    if 'num_predict' in parameters:
+        agent_cog.global_num_predict = parameters['num_predict']
+    if 'model' in parameters:
+        agent_cog.global_model = parameters['model']
+
+    # Create updated bot config
+    bot_config = {
+        'model': agent_cog.global_model,
+        'system_prompt': agent_cog.global_system_prompt,
+        'parameters': {
+            'temperature': agent_cog.global_temperature,
+            'num_ctx': agent_cog.global_num_ctx,
+            'top_k': agent_cog.global_top_k,
+            'top_p': agent_cog.global_top_p,
+            'repeat_penalty': agent_cog.global_repeat_penalty,
+            'num_predict': agent_cog.global_num_predict
+        }
+    }
+
+    # Save configuration
+    save_bot_config(agent_cog.agent_templates, bot_config, user_id)
+    return bot_config
+
+@dataclass
+class AgentTemplate:
+    """Class to represent an agent template"""
+    agent_name: str
+    personality: str
+    avatar_url: str
+    active: bool = True
+
+# Default configurations
+default_agent_templates = [
+            AgentTemplate(
+                agent_name="politics",
+                personality="You are a political agent. Focus on discussing political events and world affairs.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            ),
+            AgentTemplate(
+                agent_name="sports",
+                personality="You are a sports agent. Focus on sports news and athletic achievements.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            ),
+            AgentTemplate(
+                agent_name="finance", 
+                personality="You are a finance agent. Focus on financial markets and economic news.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            ),
+            AgentTemplate(
+                agent_name="tech",
+                personality="You are a tech agent. Focus on technology trends and innovations.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            ),
+            AgentTemplate(
+                agent_name="entertainment",
+                personality="You are a entertainment agent. Focus on movies, music, and pop culture.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            ),
+            AgentTemplate(
+                agent_name="science",
+                personality="You are a science agent. Focus on scientific discoveries and research.",
+                avatar_url="https://thispersondoesnotexist.com/",
+                active=True
+            )
+        ]
+
+default_bot_config = {
+    'model': 'llama3.2',
+    'system_prompt': """You are participating in a multi-agent conversation. Keep your responses short and relevant.
+    Always stay in character and respond from your specialized perspective while engaging meaningfully with other agents' messages.""",
+    'parameters': {
+        'temperature': 0.8,
+        'num_ctx': 2048,
+        'top_k': 40,
+        'top_p': 0.9,
+        'repeat_penalty': 1.1,
+        'num_predict': 150
+    }
+} 

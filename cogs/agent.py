@@ -4,58 +4,17 @@ from ollama import AsyncClient
 from dataclasses import dataclass
 import random
 import aiohttp
-from typing import Optional, List, Dict
-from core.utils import cleanup_webhooks, get_or_create_webhook
 import time
-import json
-from pathlib import Path
-
-@dataclass
-class AgentTemplate:
-    """Class to represent an agent template"""
-    agent_name: str
-    personality: str
-    avatar_url: str
-    active: bool = True  # Add active status with default True
-
-default_agent_templates = [
-            AgentTemplate(
-                agent_name="politics",
-                personality="You are a political agent. Focus on discussing political events and world affairs.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            ),
-            AgentTemplate(
-                agent_name="sports",
-                personality="You are a sports agent. Focus on sports news and athletic achievements.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            ),
-            AgentTemplate(
-                agent_name="finance", 
-                personality="You are a finance agent. Focus on financial markets and economic news.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            ),
-            AgentTemplate(
-                agent_name="tech",
-                personality="You are a tech agent. Focus on technology trends and innovations.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            ),
-            AgentTemplate(
-                agent_name="entertainment",
-                personality="You are a entertainment agent. Focus on movies, music, and pop culture.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            ),
-            AgentTemplate(
-                agent_name="science",
-                personality="You are a science agent. Focus on scientific discoveries and research.",
-                avatar_url="https://thispersondoesnotexist.com/",
-                active=True
-            )
-        ]
+from typing import Optional, List, Dict
+from core.utils import (
+    cleanup_webhooks, 
+    get_or_create_webhook, 
+    load_bot_config,
+    save_bot_config,
+    AgentTemplate,
+    default_agent_templates,
+    default_bot_config
+)
 
 @dataclass
 class Agent:
@@ -69,85 +28,44 @@ class Agent:
         if self.history is None:
             self.history = []
 
-def save_agent_templates(templates):
-    """Save agent templates to config file"""
-    config_path = Path("data/config.json")
-    
-    # Convert templates to dictionary format
-    templates_dict = [
-        {
-            "agent_name": t.agent_name,
-            "personality": t.personality,
-            "avatar_url": t.avatar_url,
-            "active": t.active
-        }
-        for t in templates
-    ]
-    
-    # Load existing config if it exists
-    config = {}
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    
-    # Update agent templates
-    config['agent_templates'] = templates_dict
-    
-    # Save updated config
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=4)
-
-def load_agent_templates():
-    """Load agent templates from config file"""
-    config_path = Path("data/config.json")
-    
-    if not config_path.exists():
-        # Create data directory if it doesn't exist
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        # Save default templates to config and return them
-        save_agent_templates(default_agent_templates)
-        return default_agent_templates
-        
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-            
-        if 'agent_templates' not in config or not config['agent_templates']:
-            # Save default templates to config and return them if no templates exist
-            save_agent_templates(default_agent_templates)
-            return default_agent_templates
-            
-        # Return existing templates from config
-        return [
-            AgentTemplate(
-                agent_name=t['agent_name'],
-                personality=t['personality'],
-                avatar_url=t['avatar_url'],
-                active=t.get('active', True)
-            )
-            for t in config['agent_templates']
-        ]
-    except Exception as e:
-        print(f"Error loading agent templates: {e}")
-        return default_agent_templates
-
 class AgentCog(Cog):
     def __init__(self, bot):
         self.bot = bot
         self.client = AsyncClient()
         self.agents = {}
-        self.active_webhooks = {}  # Add this to track active webhooks
-        self.global_model = "llama3.2"
-        self.global_system_prompt = """You are participating in a multi-agent conversation. Keep your responses short and relevant.
-        Always stay in character and respond from your specialized perspective while engaging meaningfully with other agents' messages."""
-        self.agent_templates = load_agent_templates()
-        self.global_temperature = 0.8
-        self.global_num_ctx = 2048
-        self.global_top_k = 40
-        self.global_top_p = 0.9
-        self.global_repeat_penalty = 1.1
-        self.global_num_predict = 150
+        self.active_webhooks = {}
+        self.user_configs = {}  # Store user-specific configurations
+        
+        # Load default templates and configuration
+        templates, bot_config = load_bot_config(default_agent_templates, default_bot_config)
+        self.default_templates = templates
+        self.default_bot_config = bot_config
+        
+        # Initialize default values
+        self.global_model = bot_config.get('model', 'llama3.2')
+        self.global_system_prompt = bot_config.get('system_prompt', default_bot_config['system_prompt'])
+        
+        params = bot_config.get('parameters', {})
+        self.global_temperature = params.get('temperature', 0.8)
+        self.global_num_ctx = params.get('num_ctx', 2048)
+        self.global_top_k = params.get('top_k', 40)
+        self.global_top_p = params.get('top_p', 0.9)
+        self.global_repeat_penalty = params.get('repeat_penalty', 1.1)
+        self.global_num_predict = params.get('num_predict', 150)
 
+    def get_user_config(self, user_id: str):
+        """Get or create user-specific configuration"""
+        if user_id not in self.user_configs:
+            templates, bot_config = load_bot_config(
+                self.default_templates,
+                self.default_bot_config,
+                user_id
+            )
+            self.user_configs[user_id] = {
+                'templates': templates,
+                'bot_config': bot_config
+            }
+        return self.user_configs[user_id]
 
     async def cleanup_webhooks(self, channel):
         """Clean up existing webhooks created by the bot"""
@@ -178,8 +96,12 @@ class AgentCog(Cog):
                 )
                 self.agents[name.lower()].webhook = webhook
 
-    def create_agents(self, num_agents):
+    def create_agents(self, num_agents, user_id: str):
         """Create the specified number of agents"""
+        # Get user-specific configuration
+        user_config = self.get_user_config(user_id)
+        self.agent_templates = user_config['templates']
+        
         # check agent templates
         active_templates = [t for t in self.agent_templates if t.active]
         if len(active_templates) == 0:
@@ -329,6 +251,16 @@ class AgentCog(Cog):
         """Command to start a conversation between agents"""
         await ctx.defer()
         
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        self.agent_templates = user_config['templates']
+        
+        # Check if user has any agents
+        if not self.agent_templates:
+            raise discord.errors.ApplicationCommandError(
+                "You don't have any agents. Use /agent create to create some or /agent default to load the defaults."
+            )
+        
         # Use provided channel or default to command channel
         target_channel = channel or ctx.channel
         
@@ -339,7 +271,7 @@ class AgentCog(Cog):
         )
 
         await progress_msg.edit(content="🎭 Creating agents...")
-        self.create_agents(num_agents)
+        self.create_agents(num_agents, str(ctx.author.id))
 
         await progress_msg.edit(content="💬 Generating responses...")
         total_time, message_count = await self.start_conversation(target_channel, topic, turns, random_order)
@@ -380,6 +312,9 @@ class AgentCog(Cog):
     @discord.option(name="avatar_url", description="The avatar of the agent", required=False)
     async def agent_create(self, ctx, agent_name: str, personality: str, avatar_url: str = None):
         """Command to create a new agent with a specific personality"""
+        user_config = self.get_user_config(str(ctx.author.id))
+        self.agent_templates = user_config['templates']
+        
         if not avatar_url:
             avatar_url = "https://thispersondoesnotexist.com/"
             
@@ -400,8 +335,8 @@ class AgentCog(Cog):
             active=True
         ))
         
-        # Save updated templates
-        save_agent_templates(self.agent_templates)
+        # Save updated templates using utility function
+        save_bot_config(self.agent_templates, user_config['bot_config'], str(ctx.author.id))
         
         embed = discord.Embed(
             title="✅ Agent Created",
@@ -418,6 +353,11 @@ class AgentCog(Cog):
     async def agent_delete(self, ctx, agent_name: str):
         """Command to delete an agent"""
         await ctx.defer()
+        
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        self.agent_templates = user_config['templates']
+        
         agent_name = agent_name.lower()
         # Check if agent exists before deletion
         agent = next((t for t in self.agent_templates if t.agent_name == agent_name), None)
@@ -431,7 +371,7 @@ class AgentCog(Cog):
             return
 
         self.agent_templates = [t for t in self.agent_templates if t.agent_name != agent_name]
-        save_agent_templates(self.agent_templates)
+        save_bot_config(self.agent_templates, user_config['bot_config'], str(ctx.author.id))
         
         embed = discord.Embed(
             title="🗑️ Agent Deleted",
@@ -445,9 +385,14 @@ class AgentCog(Cog):
     @agent.command(name="delete_all", description="Delete all agents")
     async def agent_delete_all(self, ctx):
         """Command to delete all agents"""
-        agent_count = len(self.agent_templates)
-        self.agent_templates = []
-        save_agent_templates(self.agent_templates)
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        
+        agent_count = len(user_config['templates'])
+        # Clear the templates in the user's config
+        user_config['templates'] = []
+        # Save the empty templates list
+        save_bot_config([], user_config['bot_config'], str(ctx.author.id))
         
         embed = discord.Embed(
             title="🗑️ All Agents Deleted",
@@ -459,6 +404,10 @@ class AgentCog(Cog):
     @agent.command(name="list", description="List all agents")
     async def agent_list(self, ctx):
         """Command to list all agents in an embed format"""
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        self.agent_templates = user_config['templates']
+        
         embed = discord.Embed(
             title="Available Agents",
             description="Here are all the agent templates:",
@@ -486,11 +435,15 @@ class AgentCog(Cog):
     async def agent_default(self, ctx):
         """Command to create the default agents"""
         await ctx.defer()
+        
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        
         previous_count = len(self.agent_templates)
-        self.agent_templates = default_agent_templates
+        self.agent_templates = self.default_templates
         
         # Save the default templates to config
-        save_agent_templates(self.agent_templates)
+        save_bot_config(self.agent_templates, user_config['bot_config'], str(ctx.author.id))
         
         embed = discord.Embed(
             title="✅ Default Agents Created",
@@ -510,11 +463,23 @@ class AgentCog(Cog):
         
         await ctx.respond(embed=embed)
 
-    async def setup_temporary_agent(self, agent_name: str, channel) -> tuple[str, Agent, discord.Webhook]:
+    async def setup_temporary_agent(self, agent_name: str, channel, user_id: str) -> tuple[str, Agent, discord.Webhook]:
         """Create a temporary agent and webhook for one-time use"""
+        # Get user-specific configuration first
+        user_config = self.get_user_config(user_id)
+        self.agent_templates = user_config['templates']
+        
+        # Check if there are any templates
+        if not self.agent_templates:
+            raise ValueError("No agents found. Use `/agent create` to create one or `/agent default` to load the defaults.")
+
         template = next((t for t in self.agent_templates if t.agent_name.lower() == agent_name.lower()), None)
         if not template:
-            raise ValueError(f"Agent '{agent_name}' not found. Available agents: {', '.join([t.agent_name for t in self.agent_templates])}")
+            available_agents = ", ".join([t.agent_name for t in self.agent_templates])
+            raise ValueError(
+                f"Agent '{agent_name}' not found.\n"
+                f"Available agents: {available_agents if available_agents else 'None'}"
+            )
 
         agent_name = f"agent_{template.agent_name}"
         temp_agent = Agent(
@@ -542,13 +507,18 @@ class AgentCog(Cog):
     @discord.option(name="agent", description="The agent to ask", required=True)
     @discord.option(name="question", description="The question to ask", required=True)
     async def agent_ask(self, ctx, agent: str, question: str):
+        """Ask a question to a specific agent"""
         await ctx.defer()
         progress_msg = await ctx.respond("🎭 Setting up agent...")
         
         try:
             await progress_msg.edit(content="🌐 Creating webhook...")
-            # Setup temporary agent
-            agent_name, temp_agent, webhook = await self.setup_temporary_agent(agent, ctx.channel)
+            # Setup temporary agent - pass user ID instead of just channel
+            agent_name, temp_agent, webhook = await self.setup_temporary_agent(
+                agent, 
+                ctx.channel,
+                str(ctx.author.id)  # Add user ID parameter
+            )
             
             # Store agent and webhook
             self.agents[agent_name] = temp_agent
@@ -561,12 +531,27 @@ class AgentCog(Cog):
             await self.send_chunked_message(webhook, response)
             
         except ValueError as e:
-            raise discord.errors.ApplicationCommandError(str(e))
+            # Create error embed for user-friendly error messages
+            error_embed = discord.Embed(
+                title="❌ Error",
+                description=str(e),
+                color=discord.Color.red()
+            )
+            await progress_msg.edit(content=None, embed=error_embed)
+            return
         except Exception as e:
-            raise discord.errors.ApplicationCommandError(str(e))
+            # Handle unexpected errors
+            error_embed = discord.Embed(
+                title="❌ Unexpected Error",
+                description="An unexpected error occurred while processing your request.",
+                color=discord.Color.red()
+            )
+            await progress_msg.edit(content=None, embed=error_embed)
+            print(f"Error in agent_ask: {str(e)}")
+            return
         finally:
             # Only cleanup the temporary agent, keep the webhook
-            if agent_name in self.agents:
+            if 'agent_name' in locals() and agent_name in self.agents:
                 del self.agents[agent_name]
         
         await progress_msg.edit(content=f"✨ Response sent! (Generated in {gen_time:.2f}s)")
@@ -575,10 +560,14 @@ class AgentCog(Cog):
     @discord.option(name="agent_name", description="The name of the agent to toggle", required=True)
     async def agent_toggle(self, ctx, agent_name: str):
         """Command to toggle an agent's active status"""
+        # Get user-specific configuration
+        user_config = self.get_user_config(str(ctx.author.id))
+        self.agent_templates = user_config['templates']
+        
         template = next((t for t in self.agent_templates if t.agent_name.lower() == agent_name.lower()), None)
         if template:
             template.active = not template.active
-            save_agent_templates(self.agent_templates)
+            save_bot_config(self.agent_templates, user_config['bot_config'], str(ctx.author.id))
             
             status = "Active 🟢" if template.active else "Inactive 🔴"
             action = "activated" if template.active else "deactivated"
@@ -645,7 +634,8 @@ class AgentCog(Cog):
             # Setup temporary agent for response
             temp_agent_name, temp_agent, temp_webhook = await self.setup_temporary_agent(
                 agent_name.split('_')[1] if '_' in agent_name else agent_name, 
-                message.channel
+                message.channel,
+                str(message.author.id)  # Add user ID parameter
             )
             
             # Store agent temporarily
