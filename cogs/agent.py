@@ -8,7 +8,6 @@ from typing import Optional, List, Dict
 from core.utils import cleanup_webhooks, get_or_create_webhook
 import time
 import json
-import os
 from pathlib import Path
 
 @dataclass
