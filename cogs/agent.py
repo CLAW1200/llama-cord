@@ -40,6 +40,7 @@ class AgentCog(Cog):
         templates, bot_config = load_bot_config(default_agent_templates, default_bot_config)
         self.default_templates = templates
         self.default_bot_config = bot_config
+        self.agent_templates = []  # Initialize agent_templates
         
         # Initialize default values
         self.global_model = bot_config.get('model', 'llama3.2')
@@ -55,16 +56,26 @@ class AgentCog(Cog):
 
     def get_user_config(self, user_id: str):
         """Get or create user-specific configuration"""
-        if user_id not in self.user_configs:
-            templates, bot_config = load_bot_config(
-                self.default_templates,
-                self.default_bot_config,
-                user_id
-            )
-            self.user_configs[user_id] = {
-                'templates': templates,
-                'bot_config': bot_config
-            }
+        try:
+            # Try to load existing config first
+            templates, bot_config = load_bot_config([], self.default_bot_config, user_id)
+            
+            # If no config exists yet, use empty templates but default bot config
+            if not templates:
+                templates = []
+                # Save the empty templates with default bot config
+                save_bot_config(templates, bot_config, user_id)
+        except Exception:
+            # If there's any error loading, use empty templates
+            templates = []
+            bot_config = self.default_bot_config.copy()
+            # Save the configuration
+            save_bot_config(templates, bot_config, user_id)
+        
+        self.user_configs[user_id] = {
+            'templates': templates,
+            'bot_config': bot_config
+        }
         return self.user_configs[user_id]
 
     async def cleanup_webhooks(self, channel):
@@ -389,10 +400,12 @@ class AgentCog(Cog):
         user_config = self.get_user_config(str(ctx.author.id))
         
         agent_count = len(user_config['templates'])
-        # Clear the templates in the user's config
-        user_config['templates'] = []
-        # Save the empty templates list
+        
+        # Save an empty list explicitly
         save_bot_config([], user_config['bot_config'], str(ctx.author.id))
+        
+        # Update the cached config
+        user_config['templates'] = []
         
         embed = discord.Embed(
             title="🗑️ All Agents Deleted",
@@ -404,24 +417,23 @@ class AgentCog(Cog):
     @agent.command(name="list", description="List all agents")
     async def agent_list(self, ctx):
         """Command to list all agents in an embed format"""
-        # Get user-specific configuration
+        # Get user-specific configuration - this will load fresh from config file
         user_config = self.get_user_config(str(ctx.author.id))
-        self.agent_templates = user_config['templates']
+        templates = user_config['templates']  # Use templates directly from user_config
         
         embed = discord.Embed(
             title="Available Agents",
-            description="Here are all the agent templates:",
             color=discord.Color.blue()
         )
         
-        if not self.agent_templates:
+        if not templates:
             embed.add_field(
                 name="No Agents Found",
-                value="There are currently no agent templates. Use `/create_agent` to create one or `/default_agents` to load the defaults.",
+                value="There are currently no agent templates. Use `/agent create` to create one or `/agent default` to load the defaults.",
                 inline=False
             )
         else:
-            for template in self.agent_templates:
+            for template in templates:
                 status = "Active 🟢" if template.active else "Inactive 🔴"
                 embed.add_field(
                     name=f"🤖 {template.agent_name.title()} [ {status} ]",
@@ -439,11 +451,14 @@ class AgentCog(Cog):
         # Get user-specific configuration
         user_config = self.get_user_config(str(ctx.author.id))
         
-        previous_count = len(self.agent_templates)
-        self.agent_templates = self.default_templates
+        previous_count = len(user_config['templates'])
         
-        # Save the default templates to config
-        save_bot_config(self.agent_templates, user_config['bot_config'], str(ctx.author.id))
+        # Update both file and cached config with default templates
+        new_templates = self.default_templates.copy()
+        save_bot_config(new_templates, user_config['bot_config'], str(ctx.author.id))
+        
+        # Refresh the config after saving
+        user_config = self.get_user_config(str(ctx.author.id))
         
         embed = discord.Embed(
             title="✅ Default Agents Created",
@@ -452,12 +467,12 @@ class AgentCog(Cog):
         )
         embed.add_field(
             name="Agents Loaded", 
-            value=f"Previous agents: {previous_count}\nNew agents: {len(self.agent_templates)}",
+            value=f"Previous agents: {previous_count}\nNew agents: {len(new_templates)}",
             inline=False
         )
         embed.add_field(
             name="Available Agents",
-            value="\n".join([f"• {t.agent_name}" for t in self.agent_templates]),
+            value="\n".join([f"• {t.agent_name}" for t in new_templates]),
             inline=False
         )
         
@@ -513,11 +528,11 @@ class AgentCog(Cog):
         
         try:
             await progress_msg.edit(content="🌐 Creating webhook...")
-            # Setup temporary agent - pass user ID instead of just channel
+            # Setup temporary agent
             agent_name, temp_agent, webhook = await self.setup_temporary_agent(
                 agent, 
                 ctx.channel,
-                str(ctx.author.id)  # Add user ID parameter
+                str(ctx.author.id)
             )
             
             # Store agent and webhook
@@ -529,6 +544,29 @@ class AgentCog(Cog):
             # Get and send response
             response, gen_time = await self.get_ai_response(agent_name, question)
             await self.send_chunked_message(webhook, response)
+            
+            # Create an embed for the results
+            embed = discord.Embed(
+                title="✨ Response Generated",
+                description=f"Agent **{agent}** has responded to your question",
+                color=discord.Color.green()
+            )
+
+            # Add time statistics
+            embed.add_field(
+                name="⏱️ Generation Time",
+                value=f"`{gen_time:.2f}s`",
+                inline=True
+            )
+
+            # Add message details
+            embed.add_field(
+                name="📝 Message Details",
+                value=f"Question Length: `{len(question)} chars`\nResponse Length: `{len(response)} chars`",
+                inline=True
+            )
+
+            await progress_msg.edit(content=None, embed=embed)
             
         except ValueError as e:
             # Create error embed for user-friendly error messages
@@ -553,8 +591,6 @@ class AgentCog(Cog):
             # Only cleanup the temporary agent, keep the webhook
             if 'agent_name' in locals() and agent_name in self.agents:
                 del self.agents[agent_name]
-        
-        await progress_msg.edit(content=f"✨ Response sent! (Generated in {gen_time:.2f}s)")
 
     @agent.command(name="toggle", description="Toggle an agent's active status")
     @discord.option(name="agent_name", description="The name of the agent to toggle", required=True)
