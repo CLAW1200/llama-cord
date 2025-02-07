@@ -1,6 +1,8 @@
 import discord
 from core import Cog
 from core.utils import cleanup_webhooks, update_bot_parameters
+import json
+from pathlib import Path
 
 class GlobalCommandsCog(Cog):
     def __init__(self, bot):
@@ -9,6 +11,21 @@ class GlobalCommandsCog(Cog):
     global_cmd = discord.SlashCommandGroup("global", "Global bot commands and settings")
     parameters_group = global_cmd.create_subgroup("parameters", "Manage global parameters for all agents")
     
+    # Define the autocomplete function first
+    async def model_autocomplete(self, ctx: discord.AutocompleteContext):
+        config_path = Path("data/config.json")
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            available_models = config.get('bot', {}).get('available_models', [])
+        except Exception:
+            available_models = ["llama2"]  # Fallback default
+            
+        return [
+            model for model in available_models
+            if ctx.value.lower() in model.lower()
+        ]
+
     @global_cmd.command(name="cleanup", description="Cleanup all bot webhooks")
     async def cleanup_webhooks_command(self, ctx):
         """Command to cleanup all bot webhooks"""
@@ -45,17 +62,28 @@ class GlobalCommandsCog(Cog):
     @discord.option(
         name="model",
         description="The model to set for all agents",
-        choices=[
-            "llama3.2",
-            "smollm:135m"
-        ],
-        required=True
+        required=True,
+        autocomplete=model_autocomplete
     )
     async def parameters_model(self, ctx, model: str):
         """Command to set the global model for all agents"""
         agent_cog = self.bot.get_cog("AgentCog")
         if not agent_cog:
             await ctx.respond("Agent system is not loaded!", ephemeral=True)
+            return
+
+        # Load config to get available models
+        config_path = Path("data/config.json")
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            available_models = config.get('bot', {}).get('available_models', [])
+        except Exception:
+            available_models = ["llama2"]  # Fallback default
+
+        # Check if model is available
+        if model not in available_models:
+            await ctx.respond(f"Model '{model}' is not available. Available models: {', '.join(available_models)}", ephemeral=True)
             return
 
         # Get user-specific configuration

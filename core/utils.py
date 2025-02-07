@@ -7,6 +7,8 @@ from typing import Optional
 import json
 from pathlib import Path
 from dataclasses import dataclass
+import subprocess
+import asyncio
 
 __all__ = (
     "s",
@@ -101,6 +103,22 @@ async def get_or_create_webhook(channel: discord.TextChannel, name: str, bot_use
         avatar=avatar_data
     )
 
+def get_available_models():
+    """Get list of available models from ollama"""
+    try:
+        result = subprocess.run(['ollama', 'list'], capture_output=True, text=True)
+        # Parse the output to extract model names
+        lines = result.stdout.strip().split('\n')[1:]  # Skip header line
+        models = []
+        for line in lines:
+            if line.strip():
+                model_name = line.split()[0]  # First column is model name
+                models.append(model_name)
+        return models
+    except Exception as e:
+        print(f"Error getting models: {e}")
+        return ["llama2"]  # Fallback default
+
 def save_bot_config(agent_templates, bot_config, user_id: str = "default"):
     """Save agent templates and bot configuration to config file for a specific user"""
     config_path = Path("data/config.json")
@@ -133,6 +151,11 @@ def save_bot_config(agent_templates, bot_config, user_id: str = "default"):
     # Initialize users dict if it doesn't exist
     if 'users' not in config:
         config['users'] = {}
+    
+    # Update available models in global config
+    if 'bot' not in config:
+        config['bot'] = {}
+    config['bot']['available_models'] = get_available_models()
     
     # Update or create user-specific config
     config['users'][user_id] = {
