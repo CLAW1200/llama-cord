@@ -581,7 +581,7 @@ class AgentCog(Cog):
             # Handle unexpected errors
             error_embed = discord.Embed(
                 title="❌ Unexpected Error",
-                description="An unexpected error occurred while processing your request.",
+                description=f"An unexpected error occurred while processing your request.\n\n{str(e)}",
                 color=discord.Color.red()
             )
             await progress_msg.edit(content=None, embed=error_embed)
