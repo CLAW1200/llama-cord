@@ -1,123 +1,136 @@
-# 🤖 Ollama Client in Discord with Custom Agents
+# 🤖 Ollama Client for Discord
 
-A Discord app that lets you create and interact with multiple AI agents powered by Ollama, featuring agent simulations and customizable personalities.
+A powerful Discord bot that enables multi-agent AI interactions powered by Ollama, featuring dynamic conversations and customizable AI personalities.
 
-## ✨ Features
+## 🌟 Overview
 
-- 🎭 Support for multiple agents with distinct personalities
-- 🎬 Simulate conversations between multiple agents in a channel
-- 👤 Realistic agent interactions using Discord webhooks with custom avatars
-- 💡 Create custom agents with custom personalities
-- 📝 Benchmarking of agent performance
-- ⚙️ Global commands for managing agents and model parameters
+This Discord bot creates an interactive multi-agent AI environment where multiple AI personalities can engage in natural conversations, respond to queries, and participate in simulated discussions. Built on Ollama's language models, it offers advanced features for managing AI agents and their interactions.
 
-## Screenshots
+## ✨ Key Features
 
-### Agent List & Management
-<img src="https://i.imgur.com/fcyEbjs.png" alt="Agent Management" height="300"/>
+- **Multi-Agent Support**: Create and manage multiple AI agents with distinct personalities
+- **Interactive Simulations**: Generate dynamic conversations between AI agents
+- **Custom Webhooks**: Realistic agent interactions with personalized Discord avatars
+- **Flexible Configuration**: Customize agent personalities and behaviors
+- **Performance Monitoring**: Built-in benchmarking for agent performance
+- **Advanced Controls**: Comprehensive commands for agent and model management
+
+## 📸 Interface
+
+<details>
+<summary><b>View Screenshots</b></summary>
+
+### Agent Management Interface
+<img src="https://i.imgur.com/fcyEbjs.png" alt="Agent Management Interface" width="600"/>
 
 ### Multi-Agent Simulation
-<img src="https://i.imgur.com/oXJK6Yf.png" alt="Agent Simulation" height="300"/>
+<img src="https://i.imgur.com/oXJK6Yf.png" alt="Multi-Agent Simulation" width="600"/>
 
-### Custom Agent Creation
-<img src="https://i.imgur.com/Oh7E2IC.png" alt="Custom Agents" height="200"/>
+### Agent Creation
+<img src="https://i.imgur.com/Oh7E2IC.png" alt="Agent Creation Interface" width="400"/>
+
+</details>
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### System Requirements
 
-- Python 3.8 or higher
-- Discord app token
-- Ollama installed and running
+- Python 3.8+
+- Discord Bot Token
+- Ollama (installed and running)
 
+### Installation Guide
 
-### Installation
-
-1. **Create a Virtual Environment (Recommended)**
-
+1. **Set Up Virtual Environment**
    ```bash
-   # Create venv
+   # Create virtual environment
    python -m venv venv
 
-   # Activate venv
-   # For Linux/macOS:
+   # Activate virtual environment
+   # Linux/macOS:
    source venv/bin/activate
-   # For Windows:
+   # Windows:
    venv\Scripts\activate
    ```
 
-2. **Install Dependencies**
-
+2. **Install Required Packages**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment Variables**
-
-   Create a `.env` file in the root directory:
-
+3. **Configure Environment**
+   
+   Create a `.env` file in the project root:
    ```env
-   # Required
+   # Required Configuration
    TOKEN=your_discord_bot_token
    ERRORS_WEBHOOK=your_error_webhook_url
 
-   # Optional
+   # Optional Configuration
    TESTTOKEN=your_test_bot_token
    ```
 
-### 🏃‍♂️ Running the App
+### Launch Application
 
 ```bash
 python main.py -s
 ```
 
-## 🛠️ Command Line Arguments
+## ⚙️ Command Line Options
 
-| Argument | Description |
-|:---------|:------------|
-| `-d, --debug` | Enable debug mode with additional logging |
-| `-s, --sync` | Sync slash commands with Discord |
-| `-t, --test` | Use test token instead of main token |
+| Option | Description |
+|:-------|:------------|
+| `-d, --debug` | Enable debug logging |
+| `-s, --sync` | Synchronize slash commands |
+| `-t, --test` | Use test environment token |
 
-## 📚 Available Commands
+## 📚 Command Reference
 
-### Agent Management
+### Agent Commands
 
-| Command | Description |
-|:--------|:------------|
-| `/agent ask <agent_name> <question>` | Ask a specific agent a question |
-| `/agent create <agent_name> <personality>` | Create a new agent with given personality |
-| `/agent default` | Reset to default list of agents |
-| `/agent delete <agent_name>` | Delete a specific agent |
-| `/agent delete_all` | Delete all agents |
-| `/agent list` | List all available agents |
-| `/agent simulation` | Start an agent discussion simulation |
-| `/agent toggle <agent_name>` | Enable/disable a specific agent from the simulation |
+| Command | Function |
+|:--------|:---------|
+| `/agent ask <agent_name> <question>` | Direct a question to a specific agent |
+| `/agent create <agent_name> <personality>` | Create a new agent with defined personality |
+| `/agent default` | Restore default agent configuration |
+| `/agent delete <agent_name>` | Remove a specific agent |
+| `/agent delete_all` | Remove all agents |
+| `/agent list` | Display available agents |
+| `/agent simulation` | Initialize agent discussion simulation |
+| `/agent toggle <agent_name>` | Toggle agent participation in simulations |
 
-### Global Settings
+### Global Commands
 
-| Command | Description |
-|:--------|:------------|
-| `/global cleanup` | Remove all the app webhooks from the server |
-| `/global parameters list` | Show current model parameters |
-| `/global parameters model <model>` | Set the AI model for agents to use |
-| `/global parameters set` | Configure model generation parameters |
-| `/global set_system_prompt <prompt>` | Set the system prompt for the agents |
+| Command | Function |
+|:--------|:---------|
+| `/global cleanup` | Remove server webhooks |
+| `/global parameters list` | Display current model settings |
+| `/global parameters model <model>` | Configure AI model selection |
+| `/global parameters set` | Adjust model parameters |
+| `/global set_system_prompt <prompt>` | Define system prompt |
 
-## 🔧 Simulation Parameters
+## 🎮 Simulation Configuration
 
-When using `/agent simulation`, you can configure:
-- Number of participating agents
-- Discussion topic
-- Number of conversation turns
-- Random order toggle
-- Target channel
+The `/agent simulation` command supports configuration of:
+- Agent participant count
+- Conversation subject
+- Interaction rounds
+- Random sequence option
+- Target channel selection
 
-## 📝 License
+## 📄 License
 
-See [LICENSE](LICENSE)
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Please make a pull request or open an issue.
+Contributions are welcome! Please feel free to:
+- Submit pull requests
+- Open issues for bugs or feature requests
+- Suggest improvements to documentation
 
+---
+
+<div align="center">
+<i>Powered by Ollama • Built for Discord</i>
+</div
