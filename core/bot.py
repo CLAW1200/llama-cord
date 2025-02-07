@@ -89,8 +89,18 @@ class Bot(commands.Bot):
 
         print(self.user, "is ready")
 
+    async def on_application_command(self, ctx: discord.ApplicationContext):
+        if ctx.guild is None:
+            return await ctx.respond(
+                "Commands are not supported in DMs. Please use commands in a server instead.",
+                ephemeral=True
+            )
+        else:
+            return await super().on_application_command(ctx)
+
     async def on_application_command_error(self, ctx: Context, error: Exception):
         if isinstance(error, discord.ApplicationCommandInvokeError):
+            
             if isinstance((error := error.original), discord.HTTPException):
                 message = (
                     "An HTTP exception has occurred: "
