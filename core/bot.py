@@ -164,7 +164,7 @@ class Bot(commands.Bot):
         self, debug: bool = False, cogs: list[str] | None = None, sync: bool = False, test: bool = False
     ) -> None:
         token = getenv('TESTTOKEN' if test else 'TOKEN')
-        self.load_extensions("jishaku", *cogs or ("cogs", "cogs.task"))
+        self.load_extensions(*cogs or ("cogs",))
         if sync:
             async def on_connect() -> None:
                 await self.sync_commands(delete_existing=not debug)
@@ -172,9 +172,7 @@ class Bot(commands.Bot):
 
             self.on_connect = on_connect
 
-        environ.setdefault("JISHAKU_NO_UNDERSCORE", "1")
         if debug:
             return super().run(token)
 
-        environ.setdefault("JISHAKU_HIDE", "1")
         super().run(token)
